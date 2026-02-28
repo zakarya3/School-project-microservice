@@ -22,3 +22,9 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+keycloak:
+  auth-server-url: http://localhost:8081
+  realm: school
+  client-id: school-auth
+  client-secret: y31BRRlKtCXUsxRyAtMz2r00AuEvbl9u

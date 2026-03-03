@@ -2,9 +2,11 @@ package com.example.studentservice.config;
 
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
+import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KeycloakService {
@@ -29,7 +32,7 @@ public class KeycloakService {
     @Value("${keycloak.client-secret}")
     private String clientSecret;
 
-    public String createUser(String username, String password, String roleName) {
+    public String createUser(String username, String password, String roleName, String email, String firstName, String lastName) {
 
         Keycloak keycloak = KeycloakBuilder.builder()
                 .serverUrl(serverUrl)
@@ -41,9 +44,9 @@ public class KeycloakService {
 
         UserRepresentation user = new UserRepresentation();
         user.setUsername(username);
-        user.setFirstName(username);
-        user.setLastName(username);
-        user.setEmail(username);
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setEmail(email);
         user.setEnabled(true);
 
         Response response = keycloak.realm(realm).users().create(user);
@@ -73,7 +76,7 @@ public class KeycloakService {
         return userId;
     }
 
-    public String loginUser(String username, String password) {
+    public AccessTokenResponse loginUser(String username, String password) {
         Keycloak keycloak = KeycloakBuilder.builder()
                 .serverUrl(serverUrl)
                 .realm(realm)
@@ -84,6 +87,34 @@ public class KeycloakService {
                 .password(password)
                 .build();
 
-        return keycloak.tokenManager().getAccessTokenString();
+        return keycloak.tokenManager().getAccessToken();
+    }
+
+    public void updateUser(String userId, String firstName, String lastName, String email) {
+        Keycloak keycloak = KeycloakBuilder.builder()
+                .serverUrl(serverUrl)
+                .realm(realm)
+                .clientId(clientId)
+                .clientSecret(clientSecret)
+                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                .build();
+
+        UserRepresentation user = keycloak.realm(realm).users().get(userId).toRepresentation();
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setEmail(email);
+        keycloak.realm(realm).users().get(userId).update(user);
+    }
+
+    public void deleteUser(String userId) {
+        Keycloak keycloak = KeycloakBuilder.builder()
+                .serverUrl(serverUrl)
+                .realm(realm)
+                .clientId(clientId)
+                .clientSecret(clientSecret)
+                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                .build();
+
+        keycloak.realm(realm).users().get(userId).remove();
     }
 }

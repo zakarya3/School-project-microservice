@@ -7,6 +7,11 @@ spring:
   cloud:
     compatibility-verifier:
       enabled: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/school
 
   datasource:
     url: jdbc:postgresql://localhost:5433/student_db
@@ -28,3 +33,6 @@ keycloak:
   realm: school
   client-id: school-auth
   client-secret: y31BRRlKtCXUsxRyAtMz2r00AuEvbl9u
+
+course-service:
+  url: http://localhost:8600

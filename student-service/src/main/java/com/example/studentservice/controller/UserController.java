@@ -1,11 +1,13 @@
 package com.example.studentservice.controller;
 
+import com.example.studentservice.clients.TestClient;
 import com.example.studentservice.dto.AuthDto;
 import com.example.studentservice.entities.Student;
 import com.example.studentservice.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.keycloak.representations.AccessTokenResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final TestClient testClient;
 
     @Operation(summary = "Register a new user", description = "Registers a new user with the provided details")
         @ApiResponses(value = {
@@ -71,5 +74,15 @@ public class UserController {
     @GetMapping
     public ResponseEntity<?> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
+    }
+
+    @Operation(summary = "Test endpoint", description = "A simple test endpoint to verify the service is running",
+    security = @SecurityRequirement(name = "bearerAuth"))
+        @ApiResponses(value = {
+                @ApiResponse(responseCode = "200", description = "Test successful")
+        })
+    @GetMapping("/test")
+    public String testEndpoint() {
+        return testClient.hello();
     }
 }

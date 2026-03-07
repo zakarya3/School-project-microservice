@@ -8,6 +8,7 @@ import com.example.studentservice.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.representations.AccessTokenResponse;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -17,18 +18,25 @@ public class UserServiceImpl implements UserService {
 
     private final StudentRepository studentRepository;
     private final KeycloakService  keycloakService;
+    private final UserProducerKafka userProducerKafka;
 
     @Override
+    @Transactional
     public void registerUser(AuthDto authDto) {
-        String keycloakUserId = keycloakService.createUser(authDto.getUsername(), authDto.getPassword(), authDto.getRoleName(), authDto.getEmail(), authDto.getFirstName(), authDto.getLastName());
-        Student student = new Student();
-        student.setUsername(authDto.getUsername());
-        student.setFirstName(authDto.getFirstName());
-        student.setLastName(authDto.getLastName());
-        student.setEmail(authDto.getEmail());
-        student.setKeycloakId(keycloakUserId);
-        student.setRoleName(authDto.getRoleName());
-        studentRepository.save(student);
+        try {
+            String keycloakUserId = keycloakService.createUser(authDto.getUsername(), authDto.getPassword(), authDto.getRoleName(), authDto.getEmail(), authDto.getFirstName(), authDto.getLastName());
+            Student student = new Student();
+            student.setUsername(authDto.getUsername());
+            student.setFirstName(authDto.getFirstName());
+            student.setLastName(authDto.getLastName());
+            student.setEmail(authDto.getEmail());
+            student.setKeycloakId(keycloakUserId);
+            student.setRoleName(authDto.getRoleName());
+            studentRepository.save(student);
+            userProducerKafka.sendUserRegisteredEvent(authDto);
+        } catch (Exception e) {
+            throw new RuntimeException("User registration failed: " + e.getMessage());
+        }
     }
 
     @Override

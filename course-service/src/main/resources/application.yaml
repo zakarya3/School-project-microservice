@@ -11,7 +11,13 @@ spring:
     oauth2:
       resourceserver:
         jwt:
+<<<<<<< HEAD
           issuer-uri: http://localhost:8081/realms/ecole
+=======
+          issuer-uri: http://localhost:8081/realms/school
+  kafka:
+    bootstrap-servers: localhost:9092
+>>>>>>> 3d3f149edd9ced9a77b73e5f5e497569be4a866f
 
   datasource:
     url: jdbc:postgresql://localhost:5433/course_db

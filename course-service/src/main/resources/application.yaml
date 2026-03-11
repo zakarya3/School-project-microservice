@@ -11,12 +11,12 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8081/realms/school
+          issuer-uri: http://localhost:8081/realms/ecole
 
   datasource:
     url: jdbc:postgresql://localhost:5433/course_db
-    username: postgres
-    password: postgres
+    username: mourad
+    password: 1234
 
   jpa:
     hibernate:

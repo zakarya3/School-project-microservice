@@ -1,8 +1,31 @@
+server:
+  port: 8085
 spring:
   application:
     name: api-gateway
+
   config:
     import: optional:configserver:http://localhost:8888
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      routes:
+
+        - id: student-service
+          uri: lb://student-service
+          predicates:
+            - Path=/student-service/**
+
+        - id: course-service
+          uri: lb://course-service
+          predicates:
+            - Path=/course-service/**
+
   security:
     oauth2:
       resourceserver:

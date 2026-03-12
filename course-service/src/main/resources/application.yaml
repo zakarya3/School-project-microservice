@@ -14,7 +14,13 @@ spring:
           issuer-uri: http://localhost:8081/realms/school
   kafka:
     bootstrap-servers: localhost:9092
-
+    consumer:
+      group-id: notification-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
   datasource:
     url: jdbc:postgresql://localhost:5433/course_db
     username: postgres

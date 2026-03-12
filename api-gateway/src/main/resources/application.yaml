@@ -1,8 +1,38 @@
+server:
+  port: 8085
 spring:
   application:
     name: api-gateway
+
   config:
     import: optional:configserver:http://localhost:8888
+<<<<<<< HEAD
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      routes:
+
+        - id: student-service
+          uri: lb://student-service
+          predicates:
+            - Path=/student-service/**
+
+        - id: course-service
+          uri: lb://course-service
+          predicates:
+            - Path=/course-service/**
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/school
+=======
   cloud:
     gateway:
       routes:
@@ -12,6 +42,7 @@ spring:
             - Path=/students/**
           filters:
             - StripPrefix=1
+>>>>>>> 3d3f149edd9ced9a77b73e5f5e497569be4a866f
 
 eureka:
   client:

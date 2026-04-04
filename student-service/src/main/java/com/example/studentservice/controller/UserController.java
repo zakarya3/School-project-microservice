@@ -76,6 +76,17 @@ public class UserController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
+
+    @Operation(summary = "Get user by ID", description = "Retrieves a user by their ID")
+        @ApiResponses(value = {
+                @ApiResponse(responseCode = "200", description = "User retrieved successfully"),
+                @ApiResponse(responseCode = "404", description = "User not found")
+        })
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> getUserById(@PathVariable String userId) {
+        return ResponseEntity.ok(userService.getUserById(userId));
+    }
+
     @Operation(summary = "Test endpoint", description = "A simple test endpoint to verify the service is running",
     security = @SecurityRequirement(name = "bearerAuth"))
         @ApiResponses(value = {

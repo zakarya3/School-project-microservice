@@ -1,24 +1,46 @@
 server:
   port: 8800
+
 spring:
   application:
     name: assessment-service
+
   cloud:
     compatibility-verifier:
       enabled: false
 
-    datasource:
-      url: jdbc:postgresql://localhost:5433/assessment_db
-      username: postgres
-      password: postgres
+  datasource:
+    url: jdbc:postgresql://localhost:5433/assessment_db
+    username: postgres
+    password: postgres
 
-    jpa:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
       hibernate:
-        ddl-auto: update
-      show-sql: true
+        format_sql: true
 
-  eureka:
-    client:
-      service-url:
-        defaultZone: http://localhost:8761/eureka
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/school
 
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+student-service:
+  url: http://localhost:8500
+
+course-service:
+  url: http://localhost:8600
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

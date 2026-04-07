@@ -1,0 +1,401 @@
+================================================================
+EXPLICATION DÉTAILLÉE — ASSESSMENT SERVICE CRUD
+================================================================
+
+
+================================================================
+ÉTAPE 1 — SUPPRESSION DES FICHIERS COPIÉS
+================================================================
+
+Le problème de départ : l'assessment-service était une copie conforme
+du student-service. Ce n'est pas normal dans une architecture microservices
+— chaque service doit être indépendant et ne gérer que son propre domaine.
+
+Les fichiers supprimés et pourquoi :
+
+entities/Student.java
+---------------------
+Ce fichier définissait un étudiant (username, email, keycloakId...).
+L'assessment-service n'a rien à faire avec un étudiant. Son rôle c'est
+de gérer des évaluations (notes, examens). C'était du code qui n'avait
+aucun sens ici.
+
+repository/StudentRepository.java
+----------------------------------
+Encore pire : ce fichier importait depuis
+com.example.studentservice.entities.Student.
+C'est une référence directe vers le code du student-service.
+Dans un microservice, chaque service est un programme indépendant
+compilé séparément. Si tu essaies de compiler l'assessment-service
+avec cet import, Maven va chercher la classe Student du student-service
+et ne la trouvera pas — erreur de compilation garantie.
+
+service/UserService.java et service/imp/UserServiceImpl.java
+-------------------------------------------------------------
+Ces fichiers géraient l'inscription et la connexion des utilisateurs
+via Keycloak. Ce n'est pas le rôle de l'assessment-service.
+La gestion des utilisateurs appartient au student-service.
+L'assessment-service doit juste savoir qu'un étudiant existe via son
+studentId (un simple Long), pas gérer son cycle de vie.
+
+controller/UserController.java
+-------------------------------
+Même logique : ce contrôleur exposait /users/register et /users/login.
+Ces endpoints n'ont aucun sens dans un service qui gère des évaluations.
+
+config/KeycloakService.java
+----------------------------
+Ce fichier permettait de créer des utilisateurs dans Keycloak et de les
+authentifier. L'assessment-service n'a pas à faire ça. L'authentification
+est gérée en amont par l'API Gateway qui vérifie le JWT de chaque requête
+avant même de la laisser passer. L'assessment-service reçoit des requêtes
+déjà authentifiées.
+
+dto/AuthDto.java et dto/AccessTokenResponse.java
+-------------------------------------------------
+Ce sont les objets de transfert liés à l'authentification
+(username/password/token). Puisqu'on supprime tout ce qui touche à
+Keycloak dans ce service, ces DTOs n'ont plus de raison d'exister.
+
+
+================================================================
+ÉTAPE 2 — MISE À JOUR DU POM.XML
+================================================================
+
+Le pom.xml est le fichier de configuration Maven. Il décrit les
+dépendances (bibliothèques) que ton service a besoin pour fonctionner.
+
+J'ai ajouté deux dépendances qui manquaient :
+
+spring-boot-starter-data-jpa
+------------------------------
+Pourquoi ? JPA (Java Persistence API) est ce qui permet de parler à une
+base de données PostgreSQL de façon orientée objet. Sans ça, tu ne peux
+pas utiliser @Entity, @Id, @GeneratedValue, ni JpaRepository.
+Le service aurait des erreurs de compilation dès qu'il verrait ces
+annotations. C'est la couche qui fait le pont entre tes objets Java
+et les tables SQL.
+
+lombok
+-------
+Pourquoi ? Lombok est un générateur de code. Quand tu mets @Data sur
+une classe, Lombok génère automatiquement tous les getters, setters,
+equals(), hashCode() et toString() à la compilation. Sans cette
+dépendance, les annotations @Data, @Builder, @NoArgsConstructor,
+@AllArgsConstructor, @RequiredArgsConstructor, @Slf4j ne seraient pas
+reconnues — encore des erreurs de compilation.
+
+Le <optional>true</optional> signifie que Lombok n'est utilisé qu'à
+la compilation, il n'est pas inclus dans le JAR final — c'est la
+pratique standard.
+
+
+================================================================
+ÉTAPE 3 — ASSESSMENT.JAVA (L'ENTITÉ)
+================================================================
+
+@Entity
+-------
+Dit à Spring/JPA que cette classe Java représente une table en base de
+données. Hibernate (l'implémentation JPA) va automatiquement créer la
+table assessments dans PostgreSQL grâce au paramètre ddl-auto: update
+dans application.yaml.
+
+@Table(name = "assessments")
+------------------------------
+Précise le nom exact de la table SQL. Sans ça, JPA utilise le nom de la
+classe (Assessment), ce qui marcherait aussi, mais c'est une bonne
+pratique d'être explicite.
+
+@Id
+----
+Indique que le champ id est la clé primaire de la table.
+
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+-----------------------------------------------------
+L'id sera auto-incrémenté par PostgreSQL (équivalent de SERIAL ou
+BIGSERIAL en SQL). Chaque nouvel enregistrement reçoit automatiquement
+un id unique sans que tu aies à le gérer.
+
+@Data (Lombok)
+---------------
+Génère tous les getters/setters pour tous les champs.
+
+@Builder (Lombok)
+------------------
+Génère le pattern Builder. Ça permet d'écrire :
+  Assessment.builder().title("Examen").grade(15.0).build()
+au lieu de créer l'objet puis appeler chaque setter un par un.
+C'est plus lisible et moins error-prone.
+
+@NoArgsConstructor (Lombok)
+----------------------------
+Génère un constructeur sans paramètres. JPA en a obligatoirement besoin
+pour pouvoir instancier l'objet quand il lit des données depuis la base.
+
+@AllArgsConstructor (Lombok)
+-----------------------------
+Génère un constructeur avec tous les paramètres.
+Le @Builder en a besoin en interne.
+
+Pourquoi courseId et studentId sont des Long et pas des objets ?
+-----------------------------------------------------------------
+Dans un microservice, tu ne fais pas de @ManyToOne vers une entité
+d'un autre service. Le Student existe dans le student-service, le Course
+dans le course-service. Tu ne peux pas avoir de Foreign Key entre deux
+bases de données différentes. Tu stockes juste l'identifiant numérique
+— c'est ce qu'on appelle une référence par ID cross-service.
+
+Pourquoi LocalDate pour assessmentDate ?
+-----------------------------------------
+LocalDate représente une date sans heure (ex: 2024-06-15). C'est plus
+approprié qu'un LocalDateTime pour une date d'évaluation. JPA sait
+sérialiser/désérialiser LocalDate vers une colonne SQL DATE.
+
+
+================================================================
+ÉTAPE 4 — ASSESSMENTREPOSITORY.JAVA
+================================================================
+
+extends JpaRepository<Assessment, Long>
+-----------------------------------------
+Tu hérites de toutes les opérations CRUD standard. Le premier type
+générique Assessment dit sur quelle entité on travaille. Le deuxième
+Long dit quel est le type de la clé primaire. Spring Data JPA génère
+automatiquement l'implémentation — tu n'écris aucun SQL, aucune requête.
+
+Méthodes héritées gratuitement :
+  - save()
+  - findById()
+  - findAll()
+  - deleteById()
+  - count()
+  - existsById()
+  - etc.
+
+findByCourseId(Long courseId) et findByStudentId(Long studentId)
+-----------------------------------------------------------------
+Ce n'est pas du code que tu écris : c'est une convention de nommage
+Spring Data. Spring lit le nom de la méthode, comprend que tu veux
+filtrer par le champ courseId, et génère automatiquement la requête SQL :
+  SELECT * FROM assessments WHERE course_id = ?
+Même logique pour findByStudentId.
+
+
+================================================================
+ÉTAPE 5 — LES DTOs
+================================================================
+
+Pourquoi deux DTOs différents ?
+---------------------------------
+Principe fondamental : ne jamais exposer directement ton entité JPA
+dans ton API. L'entité est liée à ta base de données, le DTO est lié
+à ton API. Ce sont deux contrats différents.
+
+AssessmentRequestDto
+---------------------
+@Data seulement — On a besoin de getters/setters pour que Jackson
+(la lib JSON de Spring) puisse désérialiser le JSON entrant vers
+cet objet. Pas de @Builder car ce DTO est créé par Jackson
+automatiquement depuis le corps de la requête HTTP.
+
+Pas de id — Quand le client envoie une requête pour créer une
+évaluation, il n'a pas d'id. L'id sera généré par la base de données.
+Si tu le mettais dans le DTO de requête, le client pourrait essayer de
+forcer un id, ce qui est dangereux.
+
+AssessmentResponseDto
+----------------------
+Avec id — La réponse inclut l'id généré par la base. Le client en a
+besoin pour les opérations suivantes (modifier, supprimer par id).
+
+@Builder — On l'utilise dans AssessmentServiceImpl pour construire
+l'objet de réponse proprement :
+  AssessmentResponseDto.builder().id(...).title(...).build()
+
+
+================================================================
+ÉTAPE 6 — ASSESSMENTSERVICE (INTERFACE) + ASSESSMENTSERVICEIMPL
+================================================================
+
+Pourquoi une interface ?
+--------------------------
+C'est le contrat du service — il définit ce que le service peut faire,
+sans dire comment. Le contrôleur dépend de l'interface, pas de
+l'implémentation. C'est le principe d'inversion de dépendance (le D
+de SOLID). Si demain tu changes l'implémentation (par exemple tu ajoutes
+du cache), le contrôleur n'a pas à changer.
+
+AssessmentServiceImpl — chaque méthode :
+
+create()
+---------
+On reçoit un AssessmentRequestDto (le JSON du client), on construit une
+entité Assessment via le builder, on la sauvegarde en base avec save()
+qui retourne l'entité avec l'id généré, puis on convertit cette entité
+en AssessmentResponseDto pour la retourner.
+
+findById()
+-----------
+findById() retourne un Optional<Assessment> — c'est un conteneur qui
+peut soit contenir une valeur, soit être vide (si l'id n'existe pas).
+.orElseThrow() dit : si l'Optional est vide, lance une exception avec
+ce message. Ça évite un NullPointerException silencieux.
+
+findAll()
+----------
+findAll() retourne une List<Assessment>. On la transforme en stream,
+on applique toDto() sur chaque élément avec map(), puis on collecte
+le résultat en List<AssessmentResponseDto>. C'est de la programmation
+fonctionnelle Java — propre et lisible.
+
+update()
+---------
+On cherche d'abord si l'entité existe (sinon exception), on met à jour
+ses champs un par un, puis on re-sauvegarde. Hibernate sait que c'est
+un UPDATE (pas un INSERT) parce que l'entité a déjà un id.
+
+delete()
+---------
+Direct et simple. Spring Data gère le SQL :
+  DELETE FROM assessments WHERE id = ?
+
+toDto() (méthode privée)
+--------------------------
+C'est le mapper — il convertit une entité JPA en DTO de réponse.
+Elle est private car personne en dehors de l'implémentation n'a à
+l'appeler. Elle est réutilisée dans toutes les méthodes qui doivent
+retourner un AssessmentResponseDto, ce qui évite la duplication de code.
+
+
+================================================================
+ÉTAPE 7 — ASSESSMENTCONTROLLER.JAVA
+================================================================
+
+@RestController
+----------------
+Combine @Controller et @ResponseBody. Ça dit à Spring que chaque méthode
+retourne directement des données JSON (pas une vue HTML). Jackson convertit
+automatiquement tes objets Java en JSON.
+
+@RequestMapping("/assessments")
+---------------------------------
+Préfixe commun pour tous les endpoints du contrôleur.
+Toutes les URLs commenceront par /assessments.
+
+@RequiredArgsConstructor (Lombok)
+-----------------------------------
+Génère un constructeur avec tous les champs final. Spring voit ce
+constructeur et injecte automatiquement AssessmentService dedans.
+C'est l'injection de dépendances par constructeur — la façon recommandée
+par Spring (pas @Autowired sur le champ).
+
+@Slf4j (Lombok)
+----------------
+Génère un logger log automatiquement. Équivalent de :
+  private static final Logger log = LoggerFactory.getLogger(AssessmentController.class)
+
+private final AssessmentService assessmentService
+--------------------------------------------------
+C'est l'interface, pas l'implémentation. Spring va injecter
+AssessmentServiceImpl automatiquement car c'est la seule classe qui
+implémente AssessmentService et qui est annotée @Service.
+
+Les 5 endpoints :
+
+POST /assessments
+------------------
+@RequestBody — Jackson lit le corps JSON de la requête et le convertit
+en AssessmentRequestDto. On retourne un ResponseEntity avec le statut
+HTTP 201 CREATED (convention REST : une création retourne 201, pas 200).
+
+GET /assessments
+-----------------
+ResponseEntity.ok() = statut 200 avec le corps.
+Retourne la liste complète de toutes les évaluations.
+
+GET /assessments/{id}
+----------------------
+@PathVariable extrait le {id} de l'URL et le passe comme paramètre Long.
+Spring convertit automatiquement la String de l'URL en Long.
+
+PUT /assessments/{id}
+----------------------
+Deux sources de données : l'id vient de l'URL (@PathVariable), les
+nouvelles valeurs viennent du corps JSON (@RequestBody).
+
+DELETE /assessments/{id}
+-------------------------
+ResponseEntity<Void> — La réponse n'a pas de corps.
+noContent() = statut HTTP 204 No Content (convention REST : un delete
+retourne 204).
+
+
+================================================================
+VUE D'ENSEMBLE — FLUX COMPLET D'UNE REQUÊTE
+================================================================
+
+Client HTTP
+    |
+    |  POST /assessments  {"title": "Examen final", "grade": 15.0, ...}
+    v
+API Gateway (port 8080)
+    |  Vérifie le JWT token Keycloak
+    |  Vérifie le rôle (ADMIN ou TEACHER requis pour /assessments/**)
+    |  Route vers assessment-service via Eureka
+    v
+AssessmentController
+    |  @RequestBody désérialise le JSON -> AssessmentRequestDto
+    |  Appelle assessmentService.create(dto)
+    v
+AssessmentServiceImpl
+    |  Construit l'entité Assessment via builder
+    |  Appelle assessmentRepository.save(assessment)
+    v
+AssessmentRepository (Spring Data JPA)
+    |  Génère et exécute :
+    |  INSERT INTO assessments (title, grade, ...) VALUES (...)
+    |  Retourne l'entité avec l'id généré
+    v
+AssessmentServiceImpl
+    |  Convertit Assessment -> AssessmentResponseDto via toDto()
+    v
+AssessmentController
+    |  ResponseEntity.status(201).body(responseDto)
+    |  Jackson sérialise AssessmentResponseDto -> JSON
+    v
+Client HTTP
+    {"id": 1, "title": "Examen final", "grade": 15.0, ...}
+
+
+================================================================
+STRUCTURE FINALE DES FICHIERS
+================================================================
+
+assessment-service/
+└── src/main/java/com/example/assessmentservice/
+    ├── AssessmentServiceApplication.java       (inchangé)
+    ├── controller/
+    │   └── AssessmentController.java           (5 endpoints CRUD)
+    ├── dto/
+    │   ├── AssessmentRequestDto.java           (entrée — sans id)
+    │   └── AssessmentResponseDto.java          (sortie — avec id)
+    ├── entities/
+    │   └── Assessment.java                     (entité JPA -> table SQL)
+    ├── repository/
+    │   └── AssessmentRepository.java           (JPA + 2 méthodes custom)
+    └── service/
+        ├── AssessmentService.java              (interface — le contrat)
+        └── imp/
+            └── AssessmentServiceImpl.java      (implémentation)
+
+Tableau des endpoints :
++--------------------------+--------+---------------------------+
+| URL                      | METHOD | Description               |
++--------------------------+--------+---------------------------+
+| /assessments             | POST   | Créer une évaluation      |
+| /assessments             | GET    | Lister toutes             |
+| /assessments/{id}        | GET    | Récupérer par ID          |
+| /assessments/{id}        | PUT    | Modifier                  |
+| /assessments/{id}        | DELETE | Supprimer                 |
++--------------------------+--------+---------------------------+
